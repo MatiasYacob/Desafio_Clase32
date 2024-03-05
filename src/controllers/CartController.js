@@ -5,6 +5,7 @@ import { productRepository } from "../services/service.js";
 import EErrors from "../services/errors/errors-enum.js";
 import CustomError from "../services/errors/CustomError.js"
 import {generateProductErrorInfo} from "../services/errors/messages/user-creation-error.message.js"
+import CustomErrorMiddleware from '../services/errors/middlewares/ErrorMiddleware.js';
 
 
 
@@ -25,7 +26,7 @@ export const getProductsInCartController = async  (req, res) => {
 
 
 
-  export const AddProductToCart = async (req, res) => {
+  export const AddProductToCart = async (req, res, next) => {
     try {
         const userId = req.user._id;
         const productId = req.params.productId;
@@ -34,12 +35,7 @@ export const getProductsInCartController = async  (req, res) => {
 
         if (!productToAddCart) {
             const errorInfo = generateProductErrorInfo(productId);
-            throw new CustomError({
-                name: 'ProductNotFoundError',
-                cause: errorInfo,
-                message: 'Error al agregar el producto al carrito',
-                code: EErrors.PRODUCT_NOT_FOUND_ERROR,
-            });
+            throw new CustomError(EErrors.PRODUCT_NOT_FOUND_ERROR, { errorInfo });
         }
 
         const updatedCart = await cartRepository.addToCart(userId, productToAddCart._id);
@@ -50,29 +46,29 @@ export const getProductsInCartController = async  (req, res) => {
             cart: updatedCart,
         });
     } catch (error) {
-        console.error('Error al agregar el producto al carrito:', error.cause);
-        res.status(500).json({ error: error.code, message: error.message });
+        console.error('Error al agregar el producto al carrito:', error.additionalInfo);
+        next(error); // Pasar el error al middleware de manejo de errores
     }
 };
 
 
 
-export const removeProductFromCart = async (req, res) => {
+export const removeProductFromCart = async (req, res, next) => {
     try {
         const productId = req.params.productId;
         const userId = req.user._id;
-        
+
         const result = await cartRepository.removeFromCart(userId, productId);
 
         if (!result.success) {
-            return res.status(404).json({ success: false, message: result.message });
-            
+            const errorInfo = generateProductErrorInfo(productId)
+            throw new CustomError(EErrors.PRODUCT_NOT_FOUND_ERROR, { errorInfo });
         }
 
         res.json({ success: true, message: `Producto ${productId} eliminado del carrito` });
     } catch (error) {
-        console.error('Error al eliminar producto del carrito:', error);
-        res.status(500).json({ success: false, message: 'Error interno del servidor' });
+        console.error('Error al eliminar producto del carrito:', error.additionalInfo);
+        next(error); // Pasar el error al middleware de manejo de errores
     }
 };
 
